@@ -1,6 +1,13 @@
+fastapi
 uvicorn[standard]
-python-dotenv
 websockets
-
-
-
+twilio
+python-multipart
+python-dotenv
+pyngrok
+requests
+torch
+numpy
+groq
+edge-tts
+pydub

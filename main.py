@@ -1,4 +1,5 @@
 import os
+import platform
 import uvicorn
 import json
 import base64
@@ -9,13 +10,14 @@ from fastapi import FastAPI, WebSocket, Request, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, Response
 from dotenv import load_dotenv
 
-# Auto-detect winget-installed ffmpeg BEFORE importing pydub
-_ffmpeg_dir = os.path.join(
-    os.environ.get("LOCALAPPDATA", ""),
-    r"Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0.1-full_build\bin"
-)
-if os.path.isdir(_ffmpeg_dir):
-    os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+# Cross-Platform FFmpeg Path Injection (Windows only)
+if platform.system() == "Windows":
+    _ffmpeg_dir = os.path.join(
+        os.environ.get("LOCALAPPDATA", ""),
+        r"Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0.1-full_build\bin"
+    )
+    if os.path.isdir(_ffmpeg_dir):
+        os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
 
 from pydub import AudioSegment
 
