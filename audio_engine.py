@@ -38,6 +38,32 @@ def _build_mulaw_table() -> list[int]:
 _MULAW_TABLE = _build_mulaw_table()
 
 
+# ── Mulaw encoding (PCM → mulaw, replaces audioop.lin2ulaw) ─────────
+_MULAW_ENCODE_MAX = 0x1FFF
+_MULAW_ENCODE_BIAS = 33
+
+def _encode_mulaw_sample(sample: int) -> int:
+    """Encode a single signed 16-bit PCM sample to a mulaw byte."""
+    sign = 0
+    if sample < 0:
+        sign = 0x80
+        sample = -sample
+    sample = min(sample + _MULAW_ENCODE_BIAS, _MULAW_ENCODE_MAX)
+    exponent = 7
+    for exp_val in range(7, -1, -1):
+        if sample & (1 << (exp_val + 3)):
+            exponent = exp_val
+            break
+    mantissa = (sample >> (exponent + 3)) & 0x0F
+    return ~(sign | (exponent << 4) | mantissa) & 0xFF
+
+def lin2ulaw(pcm_data: bytes, sample_width: int = 2) -> bytes:
+    """Convert 16-bit linear PCM bytes to mulaw-encoded bytes."""
+    n_samples = len(pcm_data) // sample_width
+    samples = struct.unpack(f"<{n_samples}h", pcm_data)
+    return bytes(_encode_mulaw_sample(s) for s in samples)
+
+
 class VADEngine:
     """
     Simple energy-based Voice Activity Detection engine.

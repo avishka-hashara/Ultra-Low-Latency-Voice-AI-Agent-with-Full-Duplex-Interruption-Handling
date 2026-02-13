@@ -3,34 +3,7 @@ import websockets
 import json
 import base64
 import wave
-import struct
-
-# ── Pure-Python lin2ulaw (replaces audioop, removed in Python 3.13+) ──
-_MULAW_MAX = 0x1FFF
-_MULAW_BIAS = 33
-
-def _encode_mulaw_sample(sample: int) -> int:
-    """Encode a single signed 16-bit PCM sample to a mulaw byte."""
-    sign = 0
-    if sample < 0:
-        sign = 0x80
-        sample = -sample
-    sample = min(sample + _MULAW_BIAS, _MULAW_MAX)
-    exponent = 7
-    for exp_val in range(7, -1, -1):
-        if sample & (1 << (exp_val + 3)):
-            exponent = exp_val
-            break
-    mantissa = (sample >> (exponent + 3)) & 0x0F
-    mulaw_byte = ~(sign | (exponent << 4) | mantissa) & 0xFF
-    return mulaw_byte
-
-def lin2ulaw(pcm_data: bytes, sample_width: int = 2) -> bytes:
-    """Convert 16-bit linear PCM bytes to mulaw-encoded bytes."""
-    n_samples = len(pcm_data) // sample_width
-    samples = struct.unpack(f"<{n_samples}h", pcm_data)
-    return bytes(_encode_mulaw_sample(s) for s in samples)
-
+import audioop
 
 # The file we are going to stream
 WAV_FILE = "test_speech.wav" 
@@ -39,35 +12,61 @@ async def stream_wav():
     uri = "ws://localhost:8000/ws"
     
     try:
-        # Open the WAV file
         wf = wave.open(WAV_FILE, 'rb')
-        print(f"🎵 Opened {WAV_FILE} (Sample Rate: {wf.getframerate()}Hz)")
+        in_rate = wf.getframerate()
+        out_rate = 8000  # Target telecom sample rate
+        
+        print(f"🎵 Opened {WAV_FILE} (Sample Rate: {in_rate}Hz -> Resampling to {out_rate}Hz)")
         
         async with websockets.connect(uri) as websocket:
             print(f"✅ Connected to Server at {uri}")
             print("🚀 Streaming audio chunks in real-time...")
 
-            # Calculate how many frames equal 20 milliseconds of audio
-            chunk_size = int(wf.getframerate() * 0.02) 
+            # We want to read 20ms of audio at the ORIGINAL sample rate
+            chunk_size = int(in_rate * 0.02) 
+            
+            # State required for audioop continuous rate conversion
+            rate_state = None
 
             while True:
                 frames = wf.readframes(chunk_size)
                 
                 if not frames:
-                    print("\n🏁 Finished streaming file.")
+                    print("\n🏁 Finished streaming file. Staying on the line in silence...")
+                    
+                    # Hardcode exactly 160 bytes of Mu-Law silence (20ms at 8kHz)
+                    silence_bytes = b'\xff' * 160 
+                    silence_payload = base64.b64encode(silence_bytes).decode("utf-8")
+                    
+                    for _ in range(50):
+                        message = {
+                            "event": "media", 
+                            "media": {"payload": silence_payload}
+                        }
+                        await websocket.send(json.dumps(message))
+                        await asyncio.sleep(0.02)
+                        
+                    print("📞 Hanging up.")
                     break
 
-                # The Engineering Part: Mimic Twilio's network compression.
-                # Telecom networks compress standard PCM audio to Mu-Law.
-                if wf.getsampwidth() == 2:
-                    mu_law_data = lin2ulaw(frames, 2)
+                # --- DSP PIPELINE ---
+                
+                # 1. Convert to Mono if the source is stereo
+                if wf.getnchannels() == 2:
+                    frames = audioop.tomono(frames, 2, 0.5, 0.5)
+
+                # 2. Resample from Source Rate (e.g., 44100) to Target Rate (8000)
+                if in_rate != out_rate:
+                    frames_8k, rate_state = audioop.ratecv(frames, 2, 1, in_rate, out_rate, rate_state)
                 else:
-                    mu_law_data = frames 
+                    frames_8k = frames
 
-                # Encode to Base64 (JSON requirement)
+                # 3. Compress to Mu-Law
+                mu_law_data = audioop.lin2ulaw(frames_8k, 2)
+
+                # --------------------
+
                 payload = base64.b64encode(mu_law_data).decode("utf-8")
-
-                # Wrap in Twilio's exact JSON structure
                 message = {
                     "event": "media",
                     "media": {
@@ -76,8 +75,6 @@ async def stream_wav():
                 }
                 
                 await websocket.send(json.dumps(message))
-                
-                # Sleep 20ms to simulate the latency of an actual phone call
                 await asyncio.sleep(0.02) 
 
     except FileNotFoundError:
