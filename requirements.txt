@@ -4,4 +4,3 @@ websockets
 
 
 
-Install the Dev Phone
