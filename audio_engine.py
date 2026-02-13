@@ -63,6 +63,11 @@ def lin2ulaw(pcm_data: bytes, sample_width: int = 2) -> bytes:
     samples = struct.unpack(f"<{n_samples}h", pcm_data)
     return bytes(_encode_mulaw_sample(s) for s in samples)
 
+def ulaw2lin(mulaw_data: bytes, sample_width: int = 2) -> bytes:
+    """Convert mulaw-encoded bytes to 16-bit linear PCM bytes."""
+    pcm_samples = [_MULAW_TABLE[b] for b in mulaw_data]
+    return struct.pack(f"<{len(pcm_samples)}h", *pcm_samples)
+
 
 class VADEngine:
     """
