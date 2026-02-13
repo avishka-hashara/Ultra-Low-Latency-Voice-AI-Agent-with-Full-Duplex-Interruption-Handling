@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Login | Neuro-Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+    </style>
+</head>
+
+<body class="text-white h-screen w-screen flex items-center justify-center p-8 relative">
+
+    <!-- Background Decoration -->
+    <div class="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
+        <div class="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-cyan-900/20 blur-[120px]"></div>
+        <div class="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full bg-purple-900/20 blur-[120px]">
+        </div>
+    </div>
+
+    <div class="glass-panel p-10 rounded-3xl w-full max-w-sm flex flex-col items-center">
+        <h1 class="text-2xl font-light tracking-widest uppercase mb-8 text-cyan-400">Identify</h1>
+
+        <!-- Login Form -->
+        <form id="login-form" class="w-full space-y-4">
+            <div>
+                <input type="email" id="email" placeholder="Email Sequence" required
+                    class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-cyan-400/50 transition-colors placeholder-white/20">
+            </div>
+            <div>
+                <input type="password" id="password" placeholder="Access Code" required
+                    class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-cyan-400/50 transition-colors placeholder-white/20">
+            </div>
+            <button type="submit"
+                class="w-full bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/30 text-cyan-300 rounded-lg py-3 text-sm font-semibold tracking-wide transition-all uppercase mt-4">
+                Initialize Session
+            </button>
+        </form>
+
+        <div class="mt-6 text-xs text-gray-500">
+            <span id="toggle-text">New entity?</span>
+            <button id="toggle-mode"
+                class="text-cyan-400 hover:text-cyan-300 ml-1 underline transition-colors">Register</button>
+        </div>
+
+        <div id="error-msg" class="mt-4 text-red-400 text-xs hidden text-center"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('login-form');
+        const emailInput = document.getElementById('email');
+        const passInput = document.getElementById('password');
+        const toggleBtn = document.getElementById('toggle-mode');
+        const errorMsg = document.getElementById('error-msg');
+        const btn = form.querySelector('button');
+
+        let isRegister = false;
+
+        toggleBtn.addEventListener('click', () => {
+            isRegister = !isRegister;
+            btn.innerText = isRegister ? "Create Entity" : "Initialize Session";
+            document.getElementById('toggle-text').innerText = isRegister ? "Existing entity?" : "New entity?";
+            toggleBtn.innerText = isRegister ? "Login" : "Register";
+            errorMsg.classList.add('hidden');
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = emailInput.value;
+            const password = passInput.value;
+            errorMsg.classList.add('hidden');
+
+            const endpoint = isRegister ? "/register" : "/token";
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) throw new Error(data.detail || "Operation failed");
+
+                if (isRegister) {
+                    // Auto login after register? Or just tell them to login.
+                    isRegister = false;
+                    btn.innerText = "Initialize Session";
+                    document.getElementById('toggle-text').innerText = "New entity?";
+                    toggleBtn.innerText = "Register";
+                    alert("Registration successful. Please login.");
+                } else {
+                    // Login success
+                    localStorage.setItem('access_token', data.access_token);
+                    window.location.href = "/dashboard";
+                }
+
+            } catch (err) {
+                errorMsg.innerText = err.message;
+                errorMsg.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+
+</html>

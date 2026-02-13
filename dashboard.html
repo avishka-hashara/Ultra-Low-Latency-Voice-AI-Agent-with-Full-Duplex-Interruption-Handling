@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Voice AI | Neuro-Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-button {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .glass-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+            border-color: rgba(6, 182, 212, 0.5);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Visualizer Orb Container */
+        .orb-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .orb-core {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(6, 182, 212, 0.4), rgba(79, 70, 229, 0.1) 60%, transparent 80%);
+            filter: blur(20px);
+            transition: all 0.2s ease-out;
+            position: absolute;
+            z-index: 0;
+        }
+
+        /* Particle Background (Simple CSS implementation) */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(6, 182, 212, 0.5);
+            border-radius: 50%;
+            animation: float 10s infinite linear;
+            pointer-events: none;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) translateX(0);
+                opacity: 0;
+            }
+
+            50% {
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: translateY(-100px) translateX(20px);
+                opacity: 0;
+            }
+        }
+
+        .msg-enter {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body class="text-white h-screen w-screen flex items-center justify-center p-8 relative">
+
+    <!-- Background Decoration -->
+    <div class="absolute top-0 left-0 w-full h-full overflow-hidden -z-10" id="particles">
+        <div class="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-cyan-900/20 blur-[120px]"></div>
+        <div class="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full bg-purple-900/20 blur-[120px]">
+        </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="w-full max-w-7xl h-full grid grid-cols-12 gap-8">
+
+        <!-- Left Panel: Transcript -->
+        <div class="col-span-4 glass-panel rounded-3xl p-6 flex flex-col h-full relative overflow-hidden">
+            <h2 class="text-xs font-bold tracking-[0.2em] text-cyan-400 mb-6 font-mono uppercase">Live Transcript</h2>
+
+            <div id="transcript-box" class="flex-1 overflow-y-auto space-y-6 pr-2">
+                <!-- Messages will be injected here -->
+                <div class="text-center text-gray-600 text-sm mt-10 italic">Waiting for conversation...</div>
+            </div>
+
+            <!-- Fade overlay at bottom of list -->
+            <div
+                class="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-[#0f172a80] to-transparent pointer-events-none">
+            </div>
+        </div>
+
+        <!-- Center Panel: Visualizer & Controls -->
+        <div class="col-span-8 flex flex-col h-full relative">
+
+            <!-- Main Visualizer Area -->
+            <div class="glass-panel rounded-3xl flex-1 flex flex-col items-center justify-center relative mb-6">
+
+                <!-- Status Pill -->
+                <div id="status-pill"
+                    class="absolute top-6 px-4 py-1.5 rounded-full bg-black/20 text-xs font-mono text-gray-400 border border-white/5 backdrop-blur-md transition-all">
+                    SYSTEM IDLE
+                </div>
+
+                <!-- The Orb -->
+                <div class="orb-container">
+                    <div id="visualizer-core" class="orb-core"></div>
+                    <!-- Canvas for frequency bars/wave -->
+                    <canvas id="visualizer-canvas" width="400" height="400" class="absolute z-10"></canvas>
+                </div>
+
+                <!-- Active Speaker Text -->
+                <div id="active-speaker"
+                    class="mt-8 text-xl font-light tracking-wide text-white/50 transition-colors duration-300 h-8">
+                    <!-- Dynamic text -->
+                </div>
+
+            </div>
+
+            <!-- Bottom Control Bar -->
+            <div class="glass-panel rounded-full h-20 px-8 flex items-center justify-between">
+
+                <div class="flex items-center space-x-6">
+                    <button id="btn-start" onclick="startSession()"
+                        class="glass-button w-12 h-12 rounded-full flex items-center justify-center group">
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                            class="h-5 w-5 text-gray-300 group-hover:text-cyan-400 transition-colors" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </button>
+
+                    <button id="btn-stop" onclick="stopSession()"
+                        class="glass-button w-12 h-12 rounded-full flex items-center justify-center group hidden">
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                            class="h-5 w-5 text-red-400 group-hover:text-red-300 transition-colors" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                        </svg>
+                    </button>
+
+                    <div class="h-8 w-px bg-white/10 mx-2"></div>
+
+                    <button onclick="logout()"
+                        class="glass-button px-4 py-2 rounded-lg text-xs font-mono text-gray-400 hover:text-white uppercase transition-colors">
+                        LOGOUT
+                    </button>
+
+                    <button onclick="resetMemory()"
+                        class="glass-button px-4 py-2 ml-4 rounded-lg text-xs font-mono text-red-400 hover:text-red-200 border-red-900/30 hover:bg-red-900/20 uppercase transition-colors">
+                        RESET MEMORY
+                    </button>
+                </div>
+
+                <!-- Mic Indicator -->
+                <div class="flex items-center space-x-3">
+                    <div id="mic-dot" class="w-2 h-2 rounded-full bg-gray-600 transition-colors duration-300"></div>
+                    <span id="mic-text" class="text-xs font-mono text-gray-500 tracking-wider">MIC OFFLINE</span>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- LOGIC ---
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            window.location.href = "/";
+        }
+
+        let ws;
+        let audioContext;
+        let mediaStream;
+        let analyser;
+        let visualizerCanvas = document.getElementById('visualizer-canvas');
+        let canvasCtx = visualizerCanvas.getContext('2d');
+        let animationId;
+
+        let nextPlayTime = 0;
+        let activeSources = [];
+
+        // UI Elements
+        const statusPill = document.getElementById('status-pill');
+        const activeSpeaker = document.getElementById('active-speaker');
+        const transcriptBox = document.getElementById('transcript-box');
+        const btnStart = document.getElementById('btn-start');
+        const btnStop = document.getElementById('btn-stop');
+        const micDot = document.getElementById('mic-dot');
+        const micText = document.getElementById('mic-text');
+        const core = document.getElementById('visualizer-core');
+
+        // Initialize particles
+        const particlesContainer = document.getElementById('particles');
+        for (let i = 0; i < 30; i++) {
+            const p = document.createElement('div');
+            p.classList.add('particle');
+            p.style.left = Math.random() * 100 + '%';
+            p.style.animationDuration = (Math.random() * 10 + 10) + 's';
+            p.style.animationDelay = (Math.random() * 5) + 's';
+            particlesContainer.appendChild(p);
+        }
+
+        function appendMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = "msg-enter text-sm mb-4";
+
+            const name = role === 'user' ? 'YOU' : 'AGENT';
+            const color = role === 'user' ? 'text-cyan-400' : 'text-purple-400';
+
+            div.innerHTML = `
+                <div class="font-mono text-[10px] ${color} mb-1 opacity-70">${name}</div>
+                <div class="text-gray-200 leading-relaxed">${text}</div>
+            `;
+
+            transcriptBox.appendChild(div);
+            transcriptBox.scrollTop = transcriptBox.scrollHeight;
+
+            // Remove placeholder if it exists
+            const placeholder = transcriptBox.querySelector('.italic');
+            if (placeholder) placeholder.remove();
+        }
+
+        async function startSession() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256; // For visualizer
+
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // --- Visualizer Setup ---
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                // Connect source -> analyser -> processor (we don't output mic to speakers to avoid echo)
+                source.connect(analyser);
+
+                // --- WebSocket ---
+                const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+                ws = new WebSocket(`${protocol}//${window.location.host}/ws/web?token=${token}`);
+
+                ws.onopen = () => {
+                    updateStatus("CONNECTED", "text-green-400");
+                    btnStart.classList.add('hidden');
+                    btnStop.classList.remove('hidden');
+                    micDot.classList.replace('bg-gray-600', 'bg-green-500');
+                    micDot.classList.add('shadow-[0_0_10px_rgba(34,197,94,0.6)]');
+                    micText.innerText = "MIC ACTIVE";
+                    micText.classList.replace('text-gray-500', 'text-green-500');
+
+                    // Audio Processing
+                    const processor = audioContext.createScriptProcessor(512, 1, 1);
+                    processor.onaudioprocess = (e) => {
+                        if (ws.readyState !== WebSocket.OPEN) return;
+
+                        const input = e.inputBuffer.getChannelData(0);
+                        const int16 = new Int16Array(input.length);
+                        for (let i = 0; i < input.length; i++) {
+                            let s = Math.max(-1, Math.min(1, input[i]));
+                            int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                        }
+
+                        // Send binary
+                        const uint8 = new Uint8Array(int16.buffer);
+                        let binary = '';
+                        // Simple loop for small buffers is fine
+                        for (let i = 0; i < uint8.byteLength; i++) binary += String.fromCharCode(uint8[i]);
+
+                        ws.send(JSON.stringify({ event: "media", media: { payload: btoa(binary) } }));
+
+                        // Mute output
+                        const out = e.outputBuffer.getChannelData(0);
+                        for (let i = 0; i < out.length; i++) out[i] = 0;
+                    };
+
+                    // Connect audio graph
+                    source.connect(processor);
+                    processor.connect(audioContext.destination);
+
+                    // Start visuals
+                    drawVisualizer();
+                };
+
+                ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+
+                    if (msg.event === "state") {
+                        if (msg.state === "LISTENING") {
+                            statusPill.innerText = "LISTENING";
+                            statusPill.className = "absolute top-6 px-4 py-1.5 rounded-full bg-green-900/40 text-xs font-mono text-green-400 border border-green-500/30 backdrop-blur-md transition-all";
+                            activeSpeaker.innerText = "";
+                        } else if (msg.state === "THINKING") {
+                            statusPill.innerText = "PROCESSING";
+                            statusPill.className = "absolute top-6 px-4 py-1.5 rounded-full bg-yellow-900/40 text-xs font-mono text-yellow-400 border border-yellow-500/30 backdrop-blur-md transition-all";
+                            activeSpeaker.innerText = "AI is thinking...";
+                        } else if (msg.state === "SPEAKING") {
+                            statusPill.innerText = "SPEAKING";
+                            statusPill.className = "absolute top-6 px-4 py-1.5 rounded-full bg-cyan-900/40 text-xs font-mono text-cyan-400 border border-cyan-500/30 backdrop-blur-md transition-all";
+                            activeSpeaker.innerText = "Reuther (AI)";
+                        } else if (msg.state === "RECEIVING") {
+                            statusPill.innerText = "RECEIVING";
+                            activeSpeaker.innerText = "User";
+                        }
+                    }
+
+                    if (msg.event === "transcript") {
+                        appendMessage(msg.role, msg.text);
+                    }
+
+                    if (msg.event === "clear") {
+                        console.log("🛑 OFF SWITCH");
+                        activeSources.forEach(s => { try { s.stop() } catch (e) { } });
+                        activeSources = [];
+                        nextPlayTime = audioContext.currentTime;
+                    }
+
+                    if (msg.event === "media") {
+                        const binary = atob(msg.media.payload);
+                        const int16Array = new Int16Array(binary.length / 2);
+                        for (let i = 0; i < binary.length; i += 2) {
+                            int16Array[i / 2] = binary.charCodeAt(i) | (binary.charCodeAt(i + 1) << 8);
+                        }
+                        const float32 = new Float32Array(int16Array.length);
+                        for (let i = 0; i < int16Array.length; i++) float32[i] = int16Array[i] / 32768.0;
+
+                        const buffer = audioContext.createBuffer(1, float32.length, 16000);
+                        buffer.getChannelData(0).set(float32);
+
+                        const source = audioContext.createBufferSource();
+                        source.buffer = buffer;
+                        source.connect(audioContext.destination);
+                        // Also connect AI audio to analyser so the visualizer sees it!
+                        source.connect(analyser);
+
+                        if (audioContext.currentTime > nextPlayTime) nextPlayTime = audioContext.currentTime + 0.05;
+                        source.start(nextPlayTime);
+                        nextPlayTime += buffer.duration;
+
+                        activeSources.push(source);
+                        source.onended = () => activeSources = activeSources.filter(s => s !== source);
+                    }
+                };
+
+            } catch (err) {
+                console.error(err);
+                updateStatus("ERROR: " + err.message, "text-red-500");
+            }
+        }
+
+        async function stopSession() {
+            if (ws) ws.close();
+
+            if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+            if (audioContext) audioContext.close();
+            cancelAnimationFrame(animationId);
+            canvasCtx.clearRect(0, 0, 400, 400);
+
+            activeSources = [];
+
+            btnStart.classList.remove('hidden');
+            btnStop.classList.add('hidden');
+
+            micDot.classList.replace('bg-green-500', 'bg-gray-600');
+            micDot.classList.remove('shadow-[0_0_10px_rgba(34,197,94,0.6)]');
+            micText.innerText = "MIC OFFLINE";
+            micText.classList.replace('text-green-500', 'text-gray-500');
+
+            statusPill.innerText = "SYSTEM IDLE";
+            statusPill.className = "absolute top-6 px-4 py-1.5 rounded-full bg-black/20 text-xs font-mono text-gray-400 border border-white/5 backdrop-blur-md transition-all";
+            activeSpeaker.innerText = "";
+            core.style.transform = "scale(1)";
+            core.style.opacity = "0.5";
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            window.location.href = "/";
+        }
+
+        async function resetMemory() {
+            if (!confirm("Are you sure you want to clear your memory? This cannot be undone.")) return;
+
+            try {
+                const response = await fetch('/reset-memory', {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    alert("Memory cleared successfully.");
+                    // Clear transcript
+                    document.getElementById('transcript-box').innerHTML = '<div class="text-center text-gray-600 text-sm mt-10 italic">Memory cleared. Waiting for conversation...</div>';
+                } else {
+                    alert("Failed to clear memory.");
+                }
+            } catch (error) {
+                console.error("Error clearing memory:", error);
+                alert("Error clearing memory.");
+            }
+        }
+
+
+        function updateStatus(text, colorClass) {
+            // Helper if needed
+        }
+
+        // --- Visualizer Loop ---
+        function drawVisualizer() {
+            if (!analyser) return;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+
+            canvasCtx.clearRect(0, 0, 400, 400);
+
+            // Calculate average volume
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+            let avg = sum / bufferLength;
+
+            // Pulse the Orb Core
+            let scale = 1 + (avg / 128); // 1.0 to ~2.0
+            core.style.transform = `scale(${scale})`;
+            core.style.opacity = 0.4 + (avg / 255);
+
+            // Draw circular wave
+            const cx = 200;
+            const cy = 200;
+            const radius = 100;
+
+            canvasCtx.beginPath();
+            canvasCtx.strokeStyle = "rgba(6, 182, 212, 0.8)";
+            canvasCtx.lineWidth = 2;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const r = radius + (v * 40 * scale * 0.5); // Radius fluctuation based on freq
+
+                // Angle
+                const angle = (i / bufferLength) * Math.PI * 2;
+                const x = cx + Math.cos(angle) * r;
+                const y = cy + Math.sin(angle) * r;
+
+                if (i === 0) canvasCtx.moveTo(x, y);
+                else canvasCtx.lineTo(x, y);
+            }
+
+            canvasCtx.closePath();
+            canvasCtx.stroke();
+
+            // Inner glow ring
+            canvasCtx.beginPath();
+            canvasCtx.arc(cx, cy, radius * 0.9, 0, Math.PI * 2);
+            canvasCtx.strokeStyle = "rgba(139, 92, 246, 0.3)";
+            canvasCtx.stroke();
+
+            animationId = requestAnimationFrame(drawVisualizer);
+        }
+
+    </script>
+</body>
+
+</html>
