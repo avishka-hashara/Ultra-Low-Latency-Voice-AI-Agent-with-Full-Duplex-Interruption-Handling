@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>Voice AI | Neuro-Interface</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -125,6 +126,61 @@
         </div>
     </div>
 
+    <!-- Analytics Modal -->
+    <div id="analytics-modal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="glass-panel w-11/12 max-w-5xl h-[80vh] rounded-3xl p-8 flex flex-col relative">
+            <button onclick="closeAnalytics()" class="absolute top-6 right-6 text-gray-400 hover:text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+
+            <h2
+                class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 mb-8">
+                Conversation Analytics</h2>
+
+            <div class="grid grid-cols-2 gap-8 h-full overflow-hidden">
+                <!-- Left: Sentiment Trend -->
+                <div class="flex flex-col bg-white/5 rounded-2xl p-4">
+                    <h3 class="text-gray-400 text-sm font-mono mb-4 uppercase tracking-wider">User Sentiment Trend</h3>
+                    <div class="flex-1 relative">
+                        <canvas id="sentimentChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Right: Stats & Topics -->
+                <div class="flex flex-col space-y-8">
+                    <!-- Latency Stat -->
+                    <div class="bg-white/5 rounded-2xl p-6 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-gray-400 text-sm font-mono uppercase tracking-wider">Avg. System Latency
+                            </h3>
+                            <div class="text-4xl font-light text-white mt-2" id="avg-latency-display">-- ms</div>
+                        </div>
+                        <div class="h-12 w-12 rounded-full bg-cyan-900/30 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-cyan-400" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Topics Chart -->
+                    <div class="flex-1 bg-white/5 rounded-2xl p-4 flex flex-col">
+                        <h3 class="text-gray-400 text-sm font-mono mb-4 uppercase tracking-wider">Top Conversation
+                            Topics</h3>
+                        <div class="flex-1 relative">
+                            <canvas id="topicChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Grid -->
     <div class="w-full max-w-7xl h-full grid grid-cols-12 gap-8">
 
@@ -208,6 +264,11 @@
                     <button onclick="resetMemory()"
                         class="glass-button px-4 py-2 ml-4 rounded-lg text-xs font-mono text-red-400 hover:text-red-200 border-red-900/30 hover:bg-red-900/20 uppercase transition-colors">
                         RESET MEMORY
+                    </button>
+
+                    <button onclick="openAnalytics()"
+                        class="glass-button px-4 py-2 ml-4 rounded-lg text-xs font-mono text-cyan-400 hover:text-cyan-200 border-cyan-900/30 hover:bg-cyan-900/20 uppercase transition-colors">
+                        ANALYTICS
                     </button>
                 </div>
 
@@ -465,7 +526,96 @@
             // Helper if needed
         }
 
-        // --- Visualizer Loop ---
+        let sentimentChartInstance = null;
+        let topicChartInstance = null;
+
+        async function openAnalytics() {
+            document.getElementById('analytics-modal').classList.remove('hidden');
+
+            try {
+                const response = await fetch('/analytics', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                renderCharts(data);
+            } catch (err) {
+                console.error("Failed to load analytics", err);
+            }
+        }
+
+        function closeAnalytics() {
+            document.getElementById('analytics-modal').classList.add('hidden');
+        }
+
+        function renderCharts(data) {
+            // Update Latency
+            document.getElementById('avg-latency-display').innerText = data.avg_latency + " ms";
+
+            // Sentiment Chart
+            const ctxSentiment = document.getElementById('sentimentChart').getContext('2d');
+            if (sentimentChartInstance) sentimentChartInstance.destroy();
+
+            const labels = data.sentiment_trend.map((_, i) => `Turn ${i + 1}`);
+            const scores = data.sentiment_trend.map(d => d.score);
+
+            sentimentChartInstance = new Chart(ctxSentiment, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Sentiment Score',
+                        data: scores,
+                        borderColor: '#22d3ee', // Cyan
+                        backgroundColor: 'rgba(34, 211, 238, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            min: -1,
+                            max: 1,
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        x: { display: false }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // Topic Chart
+            const ctxTopic = document.getElementById('topicChart').getContext('2d');
+            if (topicChartInstance) topicChartInstance.destroy();
+
+            topicChartInstance = new Chart(ctxTopic, {
+                type: 'bar',
+                data: {
+                    labels: data.topics.map(t => t.topic),
+                    datasets: [{
+                        label: 'Mentions',
+                        data: data.topics.map(t => t.count),
+                        backgroundColor: 'rgba(167, 139, 250, 0.6)', // Purple
+                        borderColor: '#a78bfa',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
         function drawVisualizer() {
             if (!analyser) return;
 

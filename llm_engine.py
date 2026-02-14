@@ -1,9 +1,11 @@
 import os
 import asyncio
+import time
 import edge_tts
 import aiosqlite
 from groq import Groq
 from dotenv import load_dotenv
+from textblob import TextBlob
 
 load_dotenv()
 
@@ -16,6 +18,7 @@ class BrainEngine:
         """
         Executes the STT -> LLM -> TTS pipeline with history.
         """
+        start_time = time.time()
         print(f"\n--- 🧠 COGNITIVE PIPELINE STARTED (User ID: {user_id}) ---")
         
         # 0. Load History
@@ -37,9 +40,12 @@ class BrainEngine:
         user_text = transcription.strip()
         print(f"👤 USER: \"{user_text}\"")
 
+        # Analyze Sentiment
+        user_sentiment = TextBlob(user_text).sentiment.polarity
+
         # Save User Turn
         async with aiosqlite.connect("storage.db") as db:
-            await db.execute("INSERT INTO conversations (user_id, role, content) VALUES (?, ?, ?)", (user_id, "user", user_text))
+            await db.execute("INSERT INTO conversations (user_id, role, content, sentiment_score) VALUES (?, ?, ?, ?)", (user_id, "user", user_text, user_sentiment))
             await db.commit()
             
         history.append({"role": "user", "content": user_text})
@@ -61,9 +67,13 @@ class BrainEngine:
         ai_text = chat_completion.choices[0].message.content.strip()
         print(f"🤖 AI: \"{ai_text}\"")
 
+        # Calculate Latency
+        end_time = time.time()
+        latency_ms = int((end_time - start_time) * 1000)
+
         # Save AI Turn
         async with aiosqlite.connect("storage.db") as db:
-            await db.execute("INSERT INTO conversations (user_id, role, content) VALUES (?, ?, ?)", (user_id, "assistant", ai_text))
+            await db.execute("INSERT INTO conversations (user_id, role, content, latency_ms) VALUES (?, ?, ?, ?)", (user_id, "assistant", ai_text, latency_ms))
             await db.commit()
 
         # 3. TTS: Microsoft Edge Neural Voices

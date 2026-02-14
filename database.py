@@ -20,9 +20,22 @@ async def init_db():
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                sentiment_score REAL,
+                latency_ms INTEGER,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
         """)
+        
+        # Migration for existing tables
+        try:
+            await db.execute("ALTER TABLE conversations ADD COLUMN sentiment_score REAL")
+            await db.execute("ALTER TABLE conversations ADD COLUMN latency_ms INTEGER")
+            print("✅ Database schema updated (added analytics columns)")
+        except Exception:
+            # Columns likely already exist
+            pass
+
+        await db.commit()
         await db.commit()
         print("✅ Database initialized (storage.db)")
 

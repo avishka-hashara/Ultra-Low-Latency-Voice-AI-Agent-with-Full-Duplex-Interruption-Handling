@@ -18,6 +18,8 @@ from state_manager import CallManager, AgentState
 from llm_engine import BrainEngine 
 from database import init_db, get_db_connection
 from auth import get_password_hash, verify_password, create_access_token, decode_token
+from textblob import TextBlob
+from collections import Counter
 
 load_dotenv()
 
@@ -77,6 +79,44 @@ async def reset_memory(user_id: int = Depends(get_current_user)):
         await db.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
         await db.commit()
     return {"message": "Memory reset successfully"}
+
+@app.get("/analytics")
+async def get_analytics(user_id: int = Depends(get_current_user)):
+    async with aiosqlite.connect("storage.db") as db:
+        # Fetch data
+        async with db.execute("SELECT role, content, sentiment_score, latency_ms, timestamp FROM conversations WHERE user_id = ? ORDER BY timestamp ASC LIMIT 100", (user_id,)) as cursor:
+            rows = await cursor.fetchall()
+            
+    if not rows:
+        return {"sentiment_trend": [], "avg_latency": 0, "topics": []}
+
+    # Process Data
+    sentiment_trend = []
+    latencies = []
+    all_user_text = ""
+
+    for role, content, sentiment, latency, timestamp in rows:
+        if role == "user":
+            if sentiment is not None:
+                sentiment_trend.append({"time": timestamp, "score": sentiment})
+            all_user_text += " " + content
+        elif role == "assistant":
+            if latency is not None:
+                latencies.append(latency)
+
+    # Metrics
+    avg_latency = sum(latencies) / len(latencies) if latencies else 0
+    
+    # Topic Extraction (Noun Phrases)
+    blob = TextBlob(all_user_text)
+    noun_phrases = blob.noun_phrases
+    top_topics = Counter(noun_phrases).most_common(10) # Top 10 topics
+
+    return {
+        "sentiment_trend": sentiment_trend,
+        "avg_latency": int(avg_latency),
+        "topics": [{"topic": t, "count": c} for t, c in top_topics]
+    }
 
 @app.post("/register")
 async def register(user: UserRegister):
