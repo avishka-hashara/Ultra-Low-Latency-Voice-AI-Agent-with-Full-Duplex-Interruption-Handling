@@ -4,3 +4,9 @@ __pycache__/
 *.pyc
 *.wav
 *.mp3
+storage.db
+ngrok.exe
+captured_utterance.wav
+server_response.wav
+ai_response.mp3
+test_speech.wav

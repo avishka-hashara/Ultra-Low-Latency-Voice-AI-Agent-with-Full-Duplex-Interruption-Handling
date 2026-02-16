@@ -2,7 +2,7 @@
 
 An advanced, real-time Voice AI Agent capable of **full-duplex communication**, meaning it can listen and speak simultaneously. It features **barge-in interruption handling**, **memory** across conversations, and a **cyberpunk glassmorphism UI** with a live audio visualizer.
 
-![Dashboard Preview](https://via.placeholder.com/800x450.png?text=Dashboard+Preview+Coming+Soon)
+![Dashboard Preview](dashboard.png)
 
 ## 🚀 Features
 
